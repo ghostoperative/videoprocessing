@@ -53,6 +53,23 @@ prompt_for_value() {
   fi
 }
 
+# Function to prompt for yes/no questions
+prompt_yes_no() {
+  local prompt=$1
+  local default=$2
+  local var_name=$3
+  
+  while true; do
+    read -p "$prompt (y/n) [$default]: " input
+    input=${input:-$default}
+    case $input in
+      [Yy]* ) eval "$var_name=true"; break;;
+      [Nn]* ) eval "$var_name=false"; break;;
+      * ) echo "Please answer y or n.";;
+    esac
+  done
+}
+
 # Prompt for configuration values
 echo -e "${BLUE}Configuration Setup${NC}"
 prompt_for_value "Enter domain name for the application" "api.example.com" DOMAIN
@@ -292,6 +309,32 @@ echo -e "\n${BLUE}Cleaning up...${NC}"
 apt-get autoremove -y
 apt-get clean
 
+# Start the server
+echo -e "\n${BLUE}Starting the FFmpeg Video Processing Engine...${NC}"
+
+# Ensure the server is running
+su - $APP_USER -c "cd $APP_DIR/app && PM2_HOME=$APP_DIR/.pm2 pm2 restart video-processor"
+
+# Show PM2 status
+echo -e "\n${BLUE}Checking server status:${NC}"
+su - $APP_USER -c "PM2_HOME=$APP_DIR/.pm2 pm2 status video-processor"
+
+# Ask if the user wants to create a system service for easier management
+START_ON_BOOT=true
+echo -e "\n${BLUE}The server is now running using PM2.${NC}"
+echo -e "${YELLOW}It will automatically start on boot due to the PM2 startup configuration.${NC}"
+
+# Check that the API is accessible
+echo -e "\n${BLUE}Checking API availability...${NC}"
+# Wait a few seconds for the server to fully start
+sleep 5
+if curl -s --head "http://localhost:$APP_PORT/api" | grep "200 OK\|404 Not Found" > /dev/null; then
+  echo -e "${GREEN}✓ API is up and running!${NC}"
+else
+  echo -e "${YELLOW}⚠ Could not verify API status. Please check the logs for any issues:${NC}"
+  echo -e "   ${CYAN}sudo su - $APP_USER -c \"PM2_HOME=$APP_DIR/.pm2 pm2 logs video-processor\"${NC}"
+fi
+
 # Final instructions
 echo -e "\n${GREEN}===== Installation Complete! =====${NC}"
 echo -e "${YELLOW}Your FFmpeg Video Processing Engine is now running at https://$DOMAIN${NC}"
@@ -300,6 +343,11 @@ echo -e "${YELLOW}Please make sure to keep this key secure!${NC}"
 echo -e "\n${BLUE}Useful commands:${NC}"
 echo -e "  - View application logs: ${CYAN}sudo su - $APP_USER -c \"PM2_HOME=$APP_DIR/.pm2 pm2 logs video-processor\"${NC}"
 echo -e "  - Restart application: ${CYAN}sudo su - $APP_USER -c \"PM2_HOME=$APP_DIR/.pm2 pm2 restart video-processor\"${NC}"
+echo -e "  - Stop application: ${CYAN}sudo su - $APP_USER -c \"PM2_HOME=$APP_DIR/.pm2 pm2 stop video-processor\"${NC}"
+echo -e "  - Start application: ${CYAN}sudo su - $APP_USER -c \"PM2_HOME=$APP_DIR/.pm2 pm2 start video-processor\"${NC}"
 echo -e "  - View Nginx logs: ${CYAN}sudo tail -f /var/log/nginx/$DOMAIN.error.log${NC}"
 echo -e "  - Edit environment variables: ${CYAN}sudo nano $APP_DIR/app/.env${NC}"
+echo -e "  - View system service status: ${CYAN}sudo systemctl status pm2-$APP_USER${NC}"
+
+echo -e "\n${GREEN}The server is now running and will automatically start on system boot.${NC}"
 echo -e "\nThank you for using FFmpeg Video Processing Engine!"
