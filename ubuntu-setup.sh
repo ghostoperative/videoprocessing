@@ -227,21 +227,33 @@ EOL
 ln -sf /etc/nginx/sites-available/$DOMAIN /etc/nginx/sites-enabled/
 rm -f /etc/nginx/sites-enabled/default
 
-# Test Nginx configuration
-nginx -t && systemctl reload nginx
+# Test Nginx configuration and reload if valid
+echo -e "\n${BLUE}Testing Nginx configuration...${NC}"
+if nginx -t; then
+    systemctl reload nginx
+    echo -e "${GREEN}✓ Nginx configuration is valid${NC}"
+else
+    echo -e "${RED}✗ Nginx configuration is invalid. Check the error above.${NC}"
+    # Continue anyway as we'll fix it with certbot
+fi
 
 # Obtain SSL certificate
 echo -e "\n${BLUE}Obtaining SSL certificate from Let's Encrypt...${NC}"
-certbot --nginx --non-interactive --agree-tos -m $EMAIL -d $DOMAIN
+certbot --nginx --non-interactive --agree-tos --redirect -m $EMAIL -d $DOMAIN
 
 # Confirm SSL certification was obtained and test Nginx again
 echo -e "\n${BLUE}Verifying SSL configuration...${NC}"
 if [ -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
     echo -e "${GREEN}✓ SSL certificates successfully obtained${NC}"
-    nginx -t && systemctl reload nginx
+    if nginx -t; then
+        systemctl reload nginx
+        echo -e "${GREEN}✓ Nginx with SSL configuration is valid${NC}"
+    else
+        echo -e "${RED}✗ Nginx SSL configuration is invalid. Manual fix required.${NC}"
+    fi
 else
     echo -e "${YELLOW}⚠ SSL certificates were not obtained. HTTPS may not be configured correctly.${NC}"
-    echo -e "${YELLOW}You can try running: sudo certbot --nginx -d $DOMAIN${NC}"
+    echo -e "${YELLOW}You can try running manually: sudo certbot --nginx -d $DOMAIN${NC}"
 fi
 
 # Setup logrotate for log files
