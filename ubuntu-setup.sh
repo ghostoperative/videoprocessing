@@ -195,18 +195,6 @@ cat > /etc/nginx/sites-available/$DOMAIN <<EOL
 server {
     listen 80;
     server_name $DOMAIN;
-
-    # Redirect HTTP to HTTPS
-    location / {
-        return 301 https://\$host\$request_uri;
-    }
-}
-
-server {
-    listen 443 ssl;
-    server_name $DOMAIN;
-    
-    # SSL configuration will be added by Certbot
     
     # Logging
     access_log /var/log/nginx/$DOMAIN.access.log;
@@ -240,14 +228,21 @@ ln -sf /etc/nginx/sites-available/$DOMAIN /etc/nginx/sites-enabled/
 rm -f /etc/nginx/sites-enabled/default
 
 # Test Nginx configuration
-nginx -t
-
-# Reload Nginx
-systemctl reload nginx
+nginx -t && systemctl reload nginx
 
 # Obtain SSL certificate
 echo -e "\n${BLUE}Obtaining SSL certificate from Let's Encrypt...${NC}"
 certbot --nginx --non-interactive --agree-tos -m $EMAIL -d $DOMAIN
+
+# Confirm SSL certification was obtained and test Nginx again
+echo -e "\n${BLUE}Verifying SSL configuration...${NC}"
+if [ -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
+    echo -e "${GREEN}✓ SSL certificates successfully obtained${NC}"
+    nginx -t && systemctl reload nginx
+else
+    echo -e "${YELLOW}⚠ SSL certificates were not obtained. HTTPS may not be configured correctly.${NC}"
+    echo -e "${YELLOW}You can try running: sudo certbot --nginx -d $DOMAIN${NC}"
+fi
 
 # Setup logrotate for log files
 echo -e "\n${BLUE}Setting up log rotation...${NC}"
